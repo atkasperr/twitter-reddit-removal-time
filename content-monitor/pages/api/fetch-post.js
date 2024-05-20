@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   const { url } = req.body;
 
   try {
-    const postIdMatch = url.match(/comments\/([a-z0-9]+)/i);
+    const postIdMatch = url.match(/comments\/([a-z0-9]+)\//i);
     if (!postIdMatch || postIdMatch.length < 2) {
       throw new Error('Invalid post ID');
     }
@@ -20,14 +20,14 @@ export default async function handler(req, res) {
     const postId = postIdMatch[1];
     const post = await r.getSubmission(postId).fetch();
 
+    const isDeleted = post.author.name === '[deleted]' || post.removed_by_category !== null || post.removed;
+
     const postDetails = {
       title: post.title,
       author: post.author.name,
       created_utc: post.created_utc,
-      upvotes: post.ups,
-      comments: post.num_comments,
-      views: post.view_count || 'N/A',
-      is_deleted: post.author.name === '[deleted]',
+      subreddit: post.subreddit_name_prefixed,
+      is_deleted: isDeleted,
     };
 
     res.status(200).json(postDetails);

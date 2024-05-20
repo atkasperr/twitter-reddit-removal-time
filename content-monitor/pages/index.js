@@ -1,46 +1,67 @@
 import { useState, useEffect, useRef } from 'react';
 
+
 export default function Home() {
-  const [url, setUrl] = useState('');
-  const [log, setLog] = useState('');
-  const [isValidUrl, setIsValidUrl] = useState(true);
-  const [postDetails, setPostDetails] = useState(null);
-  const [error, setError] = useState('');
-  const intervalRef = useRef(null);
+  const [urls, setUrls] = useState(['']);
+  const [logs, setLogs] = useState({});
+  const [isValidUrls, setIsValidUrls] = useState([true]);
+  const [postDetails, setPostDetails] = useState({});
+  const [error, setError] = useState({});
+  const intervalRefs = useRef({});
 
   const validateUrl = (url) => url.includes('.com');
 
-  const checkPostStatus = async (url) => {
+  const checkPostStatus = async (url, index) => {
     if (!validateUrl(url)) {
-      setIsValidUrl(false);
-      setPostDetails(null);
+      setIsValidUrls((prev) => {
+        const newIsValidUrls = [...prev];
+        newIsValidUrls[index] = false;
+        return newIsValidUrls;
+      });
+      setPostDetails((prev) => {
+        const newPostDetails = { ...prev };
+        delete newPostDetails[url];
+        return newPostDetails;
+      });
       return false;
     }
 
-    setIsValidUrl(true);
+    setIsValidUrls((prev) => {
+      const newIsValidUrls = [...prev];
+      newIsValidUrls[index] = true;
+      return newIsValidUrls;
+    });
 
     try {
       const response = await fetch('/api/fetch-post', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url }),
       });
       const data = await response.json();
       if (data.status === 'error') {
-        setPostDetails(null);
-        setError(data.message);
+        setPostDetails((prev) => {
+          const newPostDetails = { ...prev };
+          delete newPostDetails[url];
+          return newPostDetails;
+        });
+        setError((prev) => ({ ...prev, [url]: data.message }));
         return false;
       } else {
-        setPostDetails(data);
-        setError('');
+        setPostDetails((prev) => ({ ...prev, [url]: data }));
+        setError((prev) => ({ ...prev, [url]: '' }));
         return !data.is_deleted;
       }
     } catch (error) {
       console.error('Error checking post status:', error);
-      setPostDetails(null);
-      setError('Failed to check post status');
+      setPostDetails((prev) => {
+        const newPostDetails = { ...prev };
+        delete newPostDetails[url];
+        return newPostDetails;
+      });
+      setError((prev) => ({ ...prev, [url]: 'Failed to check post status' }));
       return false;
     }
   };
@@ -48,71 +69,110 @@ export default function Home() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const isPostAvailable = await checkPostStatus(url);
-    if (!isPostAvailable) {
-      alert('The post is either invalid or has been taken down.');
-      return;
-    }
-
-    setLog('Monitoring started...\n');
-
-    // Clear any existing interval
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-
-    // Set up a new interval to check the post status periodically
-    intervalRef.current = setInterval(async () => {
-      const isPostAvailable = await checkPostStatus(url);
+    urls.forEach((url, index) => {
+      const isPostAvailable = checkPostStatus(url, index);
       if (!isPostAvailable) {
-        setLog((prevLog) => prevLog + 'The post has been deleted.\n');
-        clearInterval(intervalRef.current);
+        alert(`The post at ${url} is either invalid or has been taken down.`);
+        return;
       }
-    }, 60000); // Check every 60 seconds
+
+      setLogs((prev) => ({ ...prev, [url]: 'Monitoring started...\n' }));
+
+      // Clear any existing interval for the URL
+      if (intervalRefs.current[url]) {
+        clearInterval(intervalRefs.current[url]);
+      }
+
+      // Set up a new interval to check the post status periodically
+      intervalRefs.current[url] = setInterval(async () => {
+        const isPostAvailable = await checkPostStatus(url, index);
+        if (!isPostAvailable) {
+          setLogs((prev) => ({
+            ...prev,
+            [url]: (prev[url] || '') + 'The post has been deleted or removed by a moderator.\n',
+          }));
+          clearInterval(intervalRefs.current[url]);
+        }
+      }, 10000); // Check every 10 seconds
+    });
+  };
+
+  const handleUrlChange = (index, value) => {
+    setUrls((prev) => {
+      const newUrls = [...prev];
+      newUrls[index] = value;
+      return newUrls;
+    });
+  };
+
+  const addUrlField = () => {
+    setUrls((prev) => [...prev, '']);
+    setIsValidUrls((prev) => [...prev, true]);
   };
 
   useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      Object.keys(intervalRefs.current).forEach((url) => {
+        clearInterval(intervalRefs.current[url]);
+      });
     };
   }, []);
 
   return (
     <div className="container">
-      <h1>Content Monitor</h1>
-      <img src="/logo.png" alt="Logo" width="200" />
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="url">Enter URL:</label>
-        <input
-          type="text"
-          id="url"
-          name="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          required
-          style={{ borderColor: isValidUrl ? 'black' : 'red' }}
-        />
-        <button type="submit">Start Monitoring</button>
-      </form>
-      <div id="log">
-        <pre>{log}</pre>
-      </div>
-      {postDetails && (
-        <div>
-          <h2>Post Details</h2>
-          <p>Title: {postDetails.title}</p>
-          <p>Author: {postDetails.author}</p>
-          <p>Created: {new Date(postDetails.created_utc * 1000).toLocaleString()}</p>
-          <p>Upvotes: {postDetails.upvotes}</p>
-          <p>Comments: {postDetails.comments}</p>
-          <p>Views: {postDetails.views}</p>
-          <p>Status: {postDetails.is_deleted ? 'Deleted' : 'Available'}</p>
-        </div>
-      )}
-      {error && <div style={{ color: 'red' }}>{error}</div>}
-      {!isValidUrl && <div style={{ color: 'red' }}>Invalid URL. Please enter a valid post URL.</div>}
+      <header className="header">
+        <h1>Michigan Content Monitor</h1>
+        <nav>
+          <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ul>
+        </nav>
+      </header>
+      <main>
+        <img src="/logo.png" alt="Logo" width={200} height={200} className="logo" />
+        <form onSubmit={handleSubmit}>
+          {urls.map((url, index) => (
+            <div key={index}>
+              <label htmlFor={`url-${index}`}>Enter URL:</label>
+              <input
+                type="text"
+                id={`url-${index}`}
+                name={`url-${index}`}
+                value={url}
+                onChange={(e) => handleUrlChange(index, e.target.value)}
+                required
+                className={isValidUrls[index] ? '' : 'invalid'}
+              />
+            </div>
+          ))}
+          <button type="button" onClick={addUrlField}>Add URL</button>
+          <button type="submit">Start Monitoring</button>
+        </form>
+        {urls.map((url, index) => (
+          <div key={index}>
+            <div id="log">
+              <pre>{logs[url]}</pre>
+            </div>
+            {postDetails[url] && (
+              <div className="post-details">
+                <h2>Post Details for {url}</h2>
+                <p><strong>Title:</strong> {postDetails[url].title}</p>
+                <p><strong>Author:</strong> {postDetails[url].author}</p>
+                <p><strong>Created:</strong> {new Date(postDetails[url].created_utc * 1000).toLocaleString()}</p>
+                <p><strong>Subreddit:</strong> {postDetails[url].subreddit}</p>
+                <p><strong>Status:</strong> {postDetails[url].is_deleted ? 'Deleted or Removed by a Moderator' : 'Available'}</p>
+              </div>
+            )}
+            {error[url] && <div className="error">{error[url]}</div>}
+            {!isValidUrls[index] && <div className="error">Invalid URL. Please enter a valid post URL.</div>}
+          </div>
+        ))}
+      </main>
+      <footer className="footer">
+        <p>&copy; 2024 Michigan Content Monitor. All rights reserved.</p>
+      </footer>
     </div>
   );
 }

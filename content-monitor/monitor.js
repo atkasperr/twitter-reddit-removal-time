@@ -21,7 +21,7 @@ async function checkContentStatus(url) {
   }
 }
 
-cron.schedule('* * * * *', async () => {
+cron.schedule('* * * * * *', async () => {
   const status = await checkContentStatus(url);
   logStatus(status);
 });
