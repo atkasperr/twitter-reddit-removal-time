@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Home() {
   const [url, setUrl] = useState('');
@@ -6,6 +6,7 @@ export default function Home() {
   const [isValidUrl, setIsValidUrl] = useState(true);
   const [postDetails, setPostDetails] = useState(null);
   const [error, setError] = useState('');
+  const intervalRef = useRef(null);
 
   const validateUrl = (url) => url.includes('.com');
 
@@ -53,33 +54,28 @@ export default function Home() {
       return;
     }
 
-    const response = await fetch('/api/start-monitoring', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ url })
-    });
+    setLog('Monitoring started...\n');
 
-    if (response.ok) {
-      setLog('Monitoring started...\n');
-      const eventSource = new EventSource('/api/log-stream');
-      eventSource.onmessage = function(event) {
-        setLog((prevLog) => prevLog + event.data + '\n');
-      };
-    } else {
-      alert('Failed to start monitoring');
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
     }
+
+    // Set up a new interval to check the post status periodically
+    intervalRef.current = setInterval(async () => {
+      const isPostAvailable = await checkPostStatus(url);
+      if (!isPostAvailable) {
+        setLog((prevLog) => prevLog + 'The post has been deleted.\n');
+        clearInterval(intervalRef.current);
+      }
+    }, 60000); // Check every 60 seconds
   };
 
   useEffect(() => {
-    const eventSource = new EventSource('/api/log-stream');
-    eventSource.onmessage = function(event) {
-      setLog((prevLog) => prevLog + event.data + '\n');
-    };
-
     return () => {
-      eventSource.close();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, []);
 

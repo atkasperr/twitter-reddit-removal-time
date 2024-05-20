@@ -1,31 +1,40 @@
 import { spawn } from 'child_process';
+import path from 'path';
 
 let monitorProcess;
+let eventEmitter;
 
 export default function handler(req, res) {
-    if (req.method === 'POST') {
-        const { url } = req.body;
+  if (req.method === 'GET') {
+    const url = req.query.url;
 
-        if (monitorProcess) {
-            monitorProcess.kill();
-        }
+    if (!monitorProcess) {
+      const scriptPath = path.resolve('monitor.js');
+      monitorProcess = spawn('node', [scriptPath, url]);
 
-        monitorProcess = spawn('node', ['monitor.js', url]);
+      monitorProcess.on('close', (code) => {
+        console.log(`Child process exited with code ${code}`);
+        monitorProcess = null;
+        eventEmitter = null;
+      });
 
-        monitorProcess.stdout.on('data', (data) => {
-            console.log(`stdout: ${data}`);
-        });
-
-        monitorProcess.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
-        });
-
-        monitorProcess.on('close', (code) => {
-            console.log(`child process exited with code ${code}`);
-        });
-
-        res.status(200).json({ success: true });
-    } else {
-        res.status(405).end(); // Method Not Allowed
+      eventEmitter = require('../../../../monitor');
     }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const sendStatusUpdate = (data) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    eventEmitter.on('status', sendStatusUpdate);
+
+    req.on('close', () => {
+      eventEmitter.removeListener('status', sendStatusUpdate);
+    });
+  } else {
+    res.status(405).end(); // Method Not Allowed
+  }
 }
