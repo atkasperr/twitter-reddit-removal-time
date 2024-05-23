@@ -35,6 +35,6 @@ export default function handler(req, res) {
       eventEmitter.removeListener('status', sendStatusUpdate);
     });
   } else {
-    res.status(405).end(); // Method Not Allowed
+    res.status(405).end();// CODE: METHOD NOT ALLOWED
   }
 }

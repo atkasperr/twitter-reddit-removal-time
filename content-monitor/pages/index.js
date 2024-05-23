@@ -78,12 +78,12 @@ export default function Home() {
 
       setLogs((prev) => ({ ...prev, [url]: 'Monitoring started...\n' }));
 
-      // Clear any existing interval for the URL
+     
       if (intervalRefs.current[url]) {
         clearInterval(intervalRefs.current[url]);
       }
 
-      // Set up a new interval to check the post status periodically
+     
       intervalRefs.current[url] = setInterval(async () => {
         const isPostAvailable = await checkPostStatus(url, index);
         if (!isPostAvailable) {
@@ -93,7 +93,7 @@ export default function Home() {
           }));
           clearInterval(intervalRefs.current[url]);
         }
-      }, 10000); // Check every 10 seconds
+      }, 10000); 
     });
   };
 
@@ -121,12 +121,12 @@ export default function Home() {
   return (
     <div className="container">
       <header className="header">
-        <h1>Michigan Content Monitor</h1>
+        <h1>Content Monitor</h1>
         <nav>
           <ul>
-            <li><a href="#home">Home</a></li>
-            <li><a href="#about">About</a></li>
-            <li><a href="#contact">Contact</a></li>
+            <li><a href="#home">Reddit</a></li>
+            <li><a href="#about">Twitter</a></li>
+            <li><a href="#contact">HTTP Protocol</a></li>
           </ul>
         </nav>
       </header>
@@ -171,7 +171,7 @@ export default function Home() {
         ))}
       </main>
       <footer className="footer">
-        <p>&copy; 2024 Michigan Content Monitor. All rights reserved.</p>
+        <p>&copy; 2024 </p>
       </footer>
     </div>
   );
